@@ -1,8 +1,8 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    id("java") // Java support
-    kotlin("jvm") version "1.9.21"
+    id("java")
+    kotlin("jvm") version "1.9.22"
     id("org.jetbrains.intellij") version "1.16.1"
 }
 
@@ -17,7 +17,7 @@ dependencies {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_11)
+        jvmTarget.set(JvmTarget.JVM_17)
         freeCompilerArgs.add("-no-stdlib")
     }
 }
@@ -54,8 +54,8 @@ tasks.patchPluginXml {
 //tasks.publishPlugin {
 //    dependsOn("patchChangelog")
 //    token = environment("PUBLISH_TOKEN")
-    // The pluginVersion is based on the SemVer (https://semver.org) and supports pre-release labels, like 2.1.7-alpha.3
-    // Specify pre-release label to publish the plugin in a custom Release Channel automatically. Read more:
-    // https://plugins.jetbrains.com/docs/intellij/deployment.html#specifying-a-release-channel
+// The pluginVersion is based on the SemVer (https://semver.org) and supports pre-release labels, like 2.1.7-alpha.3
+// Specify pre-release label to publish the plugin in a custom Release Channel automatically. Read more:
+// https://plugins.jetbrains.com/docs/intellij/deployment.html#specifying-a-release-channel
 //    channels = properties("pluginVersion").map { listOf(it.split('-').getOrElse(1) { "default" }.split('.').first()) }
 //}
