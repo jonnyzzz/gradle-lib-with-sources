@@ -1,7 +1,14 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("java") // Java support
-    kotlin("jvm") version "1.9.22"
+    kotlin("jvm") version "1.9.21"
     id("org.jetbrains.intellij") version "1.16.1"
+}
+
+///looks like IJ SDK bug/feature, because setting is NOT inherited from parent project
+repositories {
+    mavenCentral()
 }
 
 dependencies {
@@ -9,9 +16,12 @@ dependencies {
 }
 
 kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_11)
+        freeCompilerArgs.add("-no-stdlib")
+    }
 }
 
-// Configure Gradle IntelliJ Plugin - read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
 intellij {
     pluginName = "libsrc"
     version = "2023.3.2" //aka 2023.3.2
@@ -47,4 +57,3 @@ tasks.patchPluginXml {
     // https://plugins.jetbrains.com/docs/intellij/deployment.html#specifying-a-release-channel
 //    channels = properties("pluginVersion").map { listOf(it.split('-').getOrElse(1) { "default" }.split('.').first()) }
 //}
-
