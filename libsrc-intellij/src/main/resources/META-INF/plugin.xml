@@ -1,8 +1,13 @@
 <idea-plugin>
     <id>com.jonnyzzz.libsrc</id>
-    <name>Gradle libsrc</name>
+    <name>Gradle LibSrc</name>
     <vendor>jonnyzzz</vendor>
+    <resource-bundle>messages.MyBundle</resource-bundle>
 
     <depends>com.intellij.modules.platform</depends>
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <depends>com.intellij.gradle</depends>
+
+    <extensions defaultExtensionNs="org.jetbrains.plugins.gradle">
+        <projectResolve implementation="com.jonnyzzz.libsrc.LibSrcProjectResolverExtension" order="last"/>
+    </extensions>
 </idea-plugin>

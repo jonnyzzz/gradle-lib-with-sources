@@ -26,6 +26,8 @@ intellij {
     pluginName = "libsrc"
     version = "2023.3.2" //aka 2023.3.2
     type = "IC"
+
+    plugins.add("gradle")
 }
 
 tasks.patchPluginXml {
