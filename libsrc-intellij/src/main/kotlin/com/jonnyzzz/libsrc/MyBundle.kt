@@ -1,4 +1,4 @@
-package com.github.jonnyzzz.gradlelibwithsources
+package com.jonnyzzz.libsrc
 
 import com.intellij.DynamicBundle
 import org.jetbrains.annotations.NonNls
