@@ -1,16 +1,23 @@
 @file:Suppress("HasPlatformType")
 
+import de.undercouch.gradle.tasks.download.Download
 import java.io.ByteArrayOutputStream
+import java.util.Date
 import java.util.jar.JarOutputStream
 import java.util.zip.ZipEntry
 
 plugins {
     id("com.jonnyzzz.libsrc") version "0.0.1-SNAPSHOT"
     `java-library`
+
+    id("de.undercouch.download") version "5.5.0"
 }
 
 val libDir = File(projectDir ,"some-lib")
 val srcDir = File(projectDir ,"some-src")
+val srcZip = File(srcDir ,"intellij-master.zip")
+val srcUnpack = File(srcDir ,"intellij")
+val srcUnpackMarker = File(srcDir ,"intellij.marker")
 
 dependencies {
     implementation(fileTree(libDir) {
@@ -19,37 +26,34 @@ dependencies {
     })
 }
 
-val pretendDownloadLibs by tasks.creating {
-    outputs.dirs(libDir, srcDir)
+val downloadIntelliJ by tasks.creating(Download::class) {
+    src("https://github.com/JetBrains/intellij-community/archive/refs/heads/master.zip")
+    dest(srcZip)
+    overwrite(false)
+}
 
-    doFirst {
-        delete(libDir, srcDir)
-    }
+val unpackIntelliJ by tasks.creating {
+    dependsOn(downloadIntelliJ)
 
-    doLast {
-        libDir.mkdirs()
-
-        File(libDir, "api.jar").writeBytes(createJar {
-            file("META-INF/info.txt", "this is example")
-        })
-
-        File(libDir, "impl.jar").writeBytes(createJar {
-            file("META-INF/impl-info.txt", "this is example")
-        })
-    }
+    inputs.file(srcZip)
+    //old workaround to make gradle work faster on huge file trees
+    outputs.file(srcUnpackMarker)
 
     doLast {
-        srcDir.mkdirs()
-
-        File(srcDir, "src/example.java").also {
-            it.parentFile?.mkdirs()
-            it.writeText("this is example")
+        delete(srcUnpack, srcUnpackMarker)
+        copy {
+            into(srcUnpack)
+            from(zipTree(srcZip)) {
+                eachFile { path = path.substringAfter('/') }
+            }
         }
-
-        File(srcDir, "src.jar").writeBytes(createJar {
-            file("/a/b/c/d/impl-info.kt", "this is example")
-        })
+        srcUnpackMarker.parentFile?.mkdirs()
+        srcUnpackMarker.writeText(Date().toString())
     }
+}
+
+val pretendDownloadLibs by tasks.creating {
+    dependsOn(unpackIntelliJ)
 }
 
 interface JarBuilder {
