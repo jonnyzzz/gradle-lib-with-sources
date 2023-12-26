@@ -13,18 +13,23 @@ plugins {
     id("de.undercouch.download") version "5.5.0"
 }
 
-val libDir = File(projectDir ,"some-lib")
-val srcDir = File(projectDir ,"some-src")
-val srcZip = File(srcDir ,"intellij-master.zip")
-val srcUnpack = File(srcDir ,"intellij")
-val srcUnpackMarker = File(srcDir ,"intellij.marker")
+val libDir = File(projectDir, "some-lib")
+val srcDir = File(projectDir, "some-src")
+val srcZip = File(srcDir, "intellij-master.zip")
+val srcUnpack = File(srcDir, "intellij")
+val srcUnpackMarker = File(srcDir, "intellij.marker")
 
 dependencies {
     implementation(fileTree(libDir) {
         include("*.jar")
         builtBy("pretendDownloadLibs")
     })
+
+    libsrc {
+        libsrc("implementation", provider { fileTree(srcUnpack) { builtBy(pretendDownloadLibs) } })
+    }
 }
+
 
 val downloadIntelliJ by tasks.creating(Download::class) {
     src("https://github.com/JetBrains/intellij-community/archive/refs/heads/master.zip")
@@ -61,10 +66,10 @@ interface JarBuilder {
     fun file(name: String, data: String) = file(name, data.toByteArray())
 }
 
-fun createJar(builder: JarBuilder.() -> Unit) : ByteArray {
+fun createJar(builder: JarBuilder.() -> Unit): ByteArray {
     return ByteArrayOutputStream().also { bos ->
         JarOutputStream(bos).use { jar ->
-            object: JarBuilder {
+            object : JarBuilder {
                 override fun file(name: String, data: ByteArray) {
                     jar.putNextEntry(ZipEntry(name))
                     jar.write(data)
