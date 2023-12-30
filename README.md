@@ -43,3 +43,41 @@ TODO: check YouTrack for issues.
 
 
 
+
+# Related Bug
+
+## Gradle configuration
+A dependency like 
+```
+dependencies {
+  implementation(provider { fileTree(..) }) { /* this parameter causes crash */ }
+}
+```
+crashes with 
+java.lang.ClassCastException: class org.gradle.api.internal.artifacts.dependencies.DefaultSelfResolvingDependency_Decorated cannot be cast to class org.gradle.api.artifacts.ExternalModuleDependency
+
+## IntelliJ import vs builtBy
+A `fileTree`'s `buildBy` is ignored by IDE import. You can see that in the following
+example (as playground-2):
+
+```kotlin
+plugins {
+    `java-library`
+}
+val buildMe by tasks.creating {
+    doLast {
+        error("import must fail")
+    }
+}
+dependencies {
+    implementation(fileTree(projectDir) {
+        builtBy(buildMe)
+    })
+}
+```
+This project must not complete importing, but so far it works. 
+
+It has a
+[shelved IDEA-167533](https://youtrack.jetbrains.com/issue/IDEA-167533/Importing-Gradle-project-misses-tasks-that-use-builtBy)
+bug for IntelliJ.
+
