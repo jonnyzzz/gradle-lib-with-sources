@@ -1,8 +1,16 @@
 package com.jonnyzzz.libsrc
 
+import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.externalSystem.model.DataNode
+import com.intellij.openapi.externalSystem.model.ProjectKeys
+import com.intellij.openapi.externalSystem.model.project.*
+import com.intellij.openapi.externalSystem.util.ExternalSystemApiUtil
 import org.gradle.api.Project
+import org.gradle.tooling.model.idea.IdeaModule
+import org.jetbrains.plugins.gradle.model.data.GradleSourceSetData
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
 import org.jetbrains.plugins.gradle.tooling.ModelBuilderService
+import org.jetbrains.plugins.gradle.util.GradleConstants
 import java.io.Serializable
 import kotlin.reflect.KProperty
 
@@ -11,14 +19,41 @@ interface LibSrcProjectInfo : Serializable {
 }
 
 interface LibSrcProjectInfoItem : Serializable {
+    val sourceSetName: String
     val libraryName: String
     val sourceFolders: List<String>
 }
 
 class LibSrcProjectResolverExtension : AbstractProjectResolverExtension() {
+    private val logger = thisLogger()
+
+    override fun populateModuleExtraModels(gradleModel: IdeaModule, ideModule: DataNode<ModuleData>) {
+        resolverCtx.getExtraProject(gradleModel, LibSrcProjectInfo::class.java)?.let { libSrcInfos ->
+            logger.warn("Found model $libSrcInfos. $gradleModel, ${ideModule.data}, ${ideModule.children}")
+
+            val gradleModules: MutableCollection<DataNode<GradleSourceSetData>> = ExternalSystemApiUtil.getChildren(ideModule, GradleSourceSetData.KEY)
+            for (libSrcInfo in libSrcInfos.infos) {
+                val gradleModule: DataNode<GradleSourceSetData>? = gradleModules.find { libSrcInfo.sourceSetName == it.data.moduleName /*private getSourceSetName()*/ }
+
+                if (gradleModule == null) {
+                    logger.warn("Failed to resolve module $libSrcInfo")
+                    continue
+                }
+
+                val library = LibraryData(GradleConstants.SYSTEM_ID, "src:test")
+                for (src in libSrcInfo.sourceFolders) {
+                    library.addPath(LibraryPathType.SOURCE, src)
+                }
+                val data = LibraryDependencyData(gradleModule.data, library, LibraryLevel.MODULE)
+                gradleModule.createChild(ProjectKeys.LIBRARY_DEPENDENCY, data)
+            }
+        }
+
+        super.populateModuleExtraModels(gradleModel, ideModule)
+    }
 
     override fun getExtraProjectModelClasses(): Set<Class<*>> {
-        return setOf(LibSrcProjectInfoItem::class.java, LibSrcProjectInfo::class.java)
+        return setOf(LibSrcProjectInfo::class.java)
     }
 
     override fun getToolingExtensionsClasses(): Set<Class<*>> {
@@ -28,9 +63,8 @@ class LibSrcProjectResolverExtension : AbstractProjectResolverExtension() {
 
 class LibSrcProjectModelBuilderService : ModelBuilderService {
     override fun canBuild(modelName: String?): Boolean {
-        return modelName == LibSrcProjectInfoItem::class.java.name
+        return modelName == LibSrcProjectInfo::class.java.name
     }
-
 
     override fun buildAll(modelName: String?, project: Project?): Any? {
         println("Hello from libsrc Import Service")
@@ -55,6 +89,7 @@ class LibSrcProjectModelBuilderService : ModelBuilderService {
         return object : LibSrcProjectInfo {
             override val infos: List<LibSrcProjectInfoItem> = listOf(
                 object : LibSrcProjectInfoItem {
+                    override val sourceSetName: String = "main"
                     override val libraryName: String = "test"
                     override val sourceFolders: List<String> = listOf("test2")
                 }
