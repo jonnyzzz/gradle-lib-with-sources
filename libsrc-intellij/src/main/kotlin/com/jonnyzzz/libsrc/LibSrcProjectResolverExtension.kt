@@ -29,27 +29,38 @@ class LibSrcProjectResolverExtension : AbstractProjectResolverExtension() {
 
     override fun populateModuleExtraModels(gradleModel: IdeaModule, ideModule: DataNode<ModuleData>) {
         resolverCtx.getExtraProject(gradleModel, LibSrcProjectInfo::class.java)?.let { libSrcInfos ->
-            logger.warn("Found model $libSrcInfos. $gradleModel, ${ideModule.data}, ${ideModule.children}")
-
-            val gradleModules: MutableCollection<DataNode<GradleSourceSetData>> = ExternalSystemApiUtil.getChildren(ideModule, GradleSourceSetData.KEY)
-            for (libSrcInfo in libSrcInfos.infos) {
-                val gradleModule: DataNode<GradleSourceSetData>? = gradleModules.find { libSrcInfo.sourceSetName == it.data.moduleName /*private getSourceSetName()*/ }
-
-                if (gradleModule == null) {
-                    logger.warn("Failed to resolve module $libSrcInfo")
-                    continue
-                }
-
-                val library = LibraryData(GradleConstants.SYSTEM_ID, "src:test")
-                for (src in libSrcInfo.sourceFolders) {
-                    library.addPath(LibraryPathType.SOURCE, src)
-                }
-                val data = LibraryDependencyData(gradleModule.data, library, LibraryLevel.MODULE)
-                gradleModule.createChild(ProjectKeys.LIBRARY_DEPENDENCY, data)
-            }
+            processLibrarySources(libSrcInfos, gradleModel, ideModule)
         }
 
         super.populateModuleExtraModels(gradleModel, ideModule)
+    }
+
+    private fun processLibrarySources(
+        libSrcInfos: LibSrcProjectInfo,
+        gradleModel: IdeaModule,
+        ideModule: DataNode<ModuleData>
+    ) {
+        logger.warn("Found model $libSrcInfos. $gradleModel, ${ideModule.data}, ${ideModule.children}")
+
+        val gradleModules: MutableCollection<DataNode<GradleSourceSetData>> =
+            ExternalSystemApiUtil.getChildren(ideModule, GradleSourceSetData.KEY)
+
+        for (libSrcInfo in libSrcInfos.infos) {
+            val gradleModule: DataNode<GradleSourceSetData>? =
+                gradleModules.find { libSrcInfo.sourceSetName == it.data.moduleName /*private getSourceSetName()*/ }
+
+            if (gradleModule == null) {
+                logger.warn("Failed to resolve module $libSrcInfo")
+                continue
+            }
+
+            val library = LibraryData(GradleConstants.SYSTEM_ID, "sources"/*TODO: Unique ID*/)
+            for (src in libSrcInfo.sourceFolders) {
+                library.addPath(LibraryPathType.SOURCE, src)
+            }
+            val data = LibraryDependencyData(gradleModule.data, library, LibraryLevel.MODULE)
+            gradleModule.createChild(ProjectKeys.LIBRARY_DEPENDENCY, data)
+        }
     }
 
     override fun getExtraProjectModelClasses(): Set<Class<*>> {
@@ -71,13 +82,13 @@ class LibSrcProjectModelBuilderService : ModelBuilderService {
         val ext = project?.dependencies?.extensions?.findByName("libsrc") ?: return null
 
         try {
-            val configurations: Map<*, *> by ext
+            val configurations: Map<*, *> by ext.dynamic()
             val items: List<Any> = configurations.values.filterNotNull()
             println("Hello from libsrc Import Service: $configurations")
 
             for (item in items) {
-                val configurationName: String by item
-                val targets: List<*> by item
+                val configurationName: String by item.dynamic()
+                val targets: List<*> by item.dynamic()
                 println("Hello from libsrc: $configurationName -> $targets")
             }
             println("Bye from libsrc Import Service")
@@ -98,31 +109,33 @@ class LibSrcProjectModelBuilderService : ModelBuilderService {
     }
 }
 
-private fun String.cap() = replaceFirstChar { it.uppercaseChar() }
+fun Any.dynamic() = ReflectionDelegate(this)
 
-private inline operator fun <reified R> Any.getValue(nothing: Nothing?, property: KProperty<*>): R {
-    val fieldName = property.name
-    val methodName = "get" + property.name.cap()
+class ReflectionDelegate(val host: Any) {
+    inline operator fun <reified R> getValue(nothing: Nothing?, property: KProperty<*>): R {
+        val fieldName = property.name
+        val methodName = "get" + property.name.replaceFirstChar { it.uppercaseChar() }
 
-    var clazz = this.javaClass
-    while (clazz != Any::class.java) {
-        try {
-            val method = clazz.getDeclaredMethod(methodName)
-            method.isAccessible = true
-            return method.invoke(this) as R
-        } catch (t: NoSuchMethodException) {
-            //OK
+        var clazz = host.javaClass
+        while (clazz != Any::class.java) {
+            try {
+                val method = clazz.getDeclaredMethod(methodName)
+                method.isAccessible = true
+                return method.invoke(host) as R
+            } catch (t: NoSuchMethodException) {
+                //OK
+            }
+
+            try {
+                val field = clazz.getDeclaredField(fieldName)
+                field.isAccessible = true
+                return field.get(host) as R
+            } catch (t: NoSuchFieldException) {
+                //OK
+            }
+
+            clazz = clazz.superclass
         }
-
-        try {
-            val field = clazz.getDeclaredField(fieldName)
-            field.isAccessible = true
-            return field.get(this) as R
-        } catch (t: NoSuchFieldException) {
-            //OK
-        }
-
-        clazz = clazz.superclass
+        throw NoSuchMethodException("Failed to find method $methodName or field $fieldName on ${host.javaClass.name}")
     }
-    throw NoSuchMethodException("Failed to find method $methodName or field $fieldName on ${this.javaClass.name}")
 }
