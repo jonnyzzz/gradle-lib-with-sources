@@ -2,6 +2,7 @@
 
 package com.jonnyzzz.libsrc
 
+import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
@@ -14,20 +15,26 @@ class LibSrcPlugin : Plugin<Project> {
         val libsrcConfig: Configuration = project.configurations.create("libsrc-configuration")
         libsrcConfig.isVisible = false
 
-        project.dependencies.extensions.create("libsrc", LibSrcExt::class.java, project, libsrcConfig)
-        project.extensions.create("libsrc", LibSrcProjectExt::class.java)
+        val namedDomainObjectSet = project.objects.domainObjectContainer(LibSrcItem::class.java)
+
+        project.configurations.all {
+            namedDomainObjectSet.add(LibSrcItem(it.name))
+        }
+
+        project.dependencies.extensions.create("libsrc", LibSrcExt::class.java,
+            project,
+            libsrcConfig,
+            namedDomainObjectSet
+        )
     }
 }
 
-open class LibSrcProjectExt {
-
-}
-
-open class LibSrcExt(
+abstract class LibSrcExt(
     private val project: Project,
     @Suppress("MemberVisibilityCanBePrivate")
     val libsrcConfig: Configuration,
-) {
+    private val objects: NamedDomainObjectContainer<LibSrcItem>,
+) : NamedDomainObjectContainer<LibSrcItem> by objects {
     private val configurations = mutableMapOf<String, LibSrcItem>()
 
     open operator fun invoke(forConfiguration: String, vararg files: Any) {
@@ -39,6 +46,7 @@ open class LibSrcExt(
             //TODO: make task depend from any of the files (and providers)
         }
 
+        return
         //TODO: alternatively, we just scan all files to resolve that
         project.artifacts.add(libsrcConfig.name, 42) {
             it.builtBy(libsrcTask)
@@ -55,6 +63,9 @@ open class LibSrcItem(
     @Suppress("MemberVisibilityCanBePrivate")
     val configurationName: String,
 ) {
+    @Deprecated(level = DeprecationLevel.HIDDEN, message = "Needed for Gradle to form NamedObjectCollection")
+    val name by ::configurationName
+
     private var targets: Collection<Any> = emptyList()
 
     fun addTargets(targets: List<Any>) {
