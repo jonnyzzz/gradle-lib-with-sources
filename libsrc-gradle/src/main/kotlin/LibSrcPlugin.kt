@@ -36,6 +36,9 @@ abstract class LibSrcExt(
     private val objects: NamedDomainObjectContainer<LibSrcItem>,
 ) : NamedDomainObjectContainer<LibSrcItem> by objects {
     private val configurations = mutableMapOf<String, LibSrcItem>()
+    fun create(configurationRef: KFunction1<Any, Dependency?>, builder: Action<LibSrcItem>) {
+
+    }
 
     open operator fun invoke(forConfiguration: String, vararg files: Any) {
         return libsrc(forConfiguration, files)

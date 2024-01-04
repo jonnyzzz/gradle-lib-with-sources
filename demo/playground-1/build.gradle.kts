@@ -5,6 +5,7 @@ import java.io.ByteArrayOutputStream
 import java.util.Date
 import java.util.jar.JarOutputStream
 import java.util.zip.ZipEntry
+import kotlin.reflect.KFunction1
 
 plugins {
     id("com.jonnyzzz.libsrc") version "0.0.1-SNAPSHOT"
@@ -23,6 +24,17 @@ dependencies {
     implementation(fileTree(libDir) {
         include("*.jar")
         builtBy("pretendDownloadLibs")
+    })
+
+    val value : KFunction1<Any, Dependency?> = ::implementation
+
+
+    project.objects.polymorphicDomainObjectContainer()
+
+    libsrc({
+        create(::implementation) {
+
+        }
     })
 
     libsrc("implementation", provider { fileTree(srcUnpack) { builtBy(pretendDownloadLibs) } })
