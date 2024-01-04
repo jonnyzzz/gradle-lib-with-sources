@@ -25,9 +25,7 @@ dependencies {
         builtBy("pretendDownloadLibs")
     })
 
-    libsrc {
-        libsrc("implementation", provider { fileTree(srcUnpack) { builtBy(pretendDownloadLibs) } })
-    }
+    libsrc("implementation", provider { fileTree(srcUnpack) { builtBy(pretendDownloadLibs) } })
 }
 
 
