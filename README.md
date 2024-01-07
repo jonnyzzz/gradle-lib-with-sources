@@ -123,3 +123,13 @@ rather than as a function call. The code is the same.
 So far, it looks like we lack some generic way in Gradle to allow generating a code like it does for
 `DependencyHandler` class. On the other end, the more freedom, the move complexity it may bring
 to the ecosystem.
+
+The next move towards NamedDomainObjectContainer generates an accessor that uses `named`
+function to access all known object names. It makes it fail on runtime with an exception
+`org.gradle.api.NamedDomainObjectProvider com.jonnyzzz.libsrc.LibSrcExtension.named(java.lang.String, java.lang.Class)`.
+
+The `CodeGenerator.kt` in Gradle defines two options: it uses `findByName` for Extensions and Conventions, 
+and it uses the `named` function for `NamedDomainObjectContainer`. 
+
+The last step to fix the problem was to introduce model interface for the extension,
+which has to extend the NamedDomainObjectContainer interface.

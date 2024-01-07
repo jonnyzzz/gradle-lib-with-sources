@@ -35,14 +35,29 @@ class LibSrcPlugin : Plugin<Project> {
     }
 }
 
-interface LibSrcExtension {
+interface LibSrcExtension : NamedDomainObjectContainer<LibSrcItem> {
     /**
-     * @see LibSrcItem.invoke
+     * Attaches sources to the configuration.
+     *
+     * @see LibSrcItem.invoke for more details
      */
     operator fun NamedDomainObjectProvider<LibSrcItem>.invoke(
         baseDir: Any,
         action: Action<in ConfigurableFileTree> = Action { }
     ) = configure { it(baseDir, action) }
+
+    /**
+     * Attaches sources to the configuration.
+     *
+     * Helper function to support cases, where Gradle code generation
+     * is not enabled.
+     *
+     * @see LibSrcItem.invoke for more details
+     */
+    operator fun String.invoke(
+        baseDir: Any,
+        action: Action<in ConfigurableFileTree> = Action { }
+    ) = named(this).configure { it(baseDir, action) }
 }
 
 open class LibSrcExtImpl(
