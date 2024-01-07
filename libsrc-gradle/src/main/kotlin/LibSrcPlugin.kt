@@ -3,44 +3,57 @@
 package com.jonnyzzz.libsrc
 
 import org.gradle.api.*
-import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.ConfigurableFileTree
 import org.gradle.api.logging.Logging
-import org.gradle.api.plugins.ExtensionAware
 import java.util.concurrent.CopyOnWriteArrayList
+import javax.inject.Inject
 
 @Suppress("unused")
 class LibSrcPlugin : Plugin<Project> {
+    companion object {
+        private val log = Logging.getLogger(LibSrcPlugin::class.java)
+    }
+
     override fun apply(project: Project) {
-        println("Hello from libsrc plugin")
+        val configurations = project.objects.domainObjectContainer(LibSrcItem::class.java) {
+            throw UnsupportedOperationException("Project configurations are mapped automatically to libSrc items")
+        }
 
-        val libsrcConfig: Configuration = project.configurations.create("libsrc-configuration")
-        libsrcConfig.isVisible = false
-
-        val ext = project.extensions.create(
-            "libsrc", LibSrcExt::class.java
+        project.extensions.create(
+            LibSrcExtension::class.java,
+            "libsrc",
+            LibSrcExtImpl::class.java, configurations
         )
 
         project.configurations.all {
             if (it.isVisible) {
-                println("Configure for :${it.name}")
-
-                ext.extensions.create(it.name, LibSrcItem::class.java, project, ConfigurationName(it.name))
+                log.info("Configure for configuration {}", it.name)
+                val newItem = project.objects.newInstance(LibSrcItem::class.java, project, it.name)
+                configurations.add(newItem)
             }
         }
-
     }
 }
 
-data class ConfigurationName(val name: String)
+interface LibSrcExtension {
+    /**
+     * @see LibSrcItem.invoke
+     */
+    operator fun NamedDomainObjectProvider<LibSrcItem>.invoke(
+        baseDir: Any,
+        action: Action<in ConfigurableFileTree> = Action { }
+    ) = configure { it(baseDir, action) }
+}
 
-abstract class LibSrcExt : ExtensionAware
+open class LibSrcExtImpl(
+    private val configurations: NamedDomainObjectContainer<LibSrcItem>,
+) : LibSrcExtension, NamedDomainObjectContainer<LibSrcItem> by configurations
 
-abstract class LibSrcItem(
+open class LibSrcItem @Inject constructor(
     private val project: Project,
 
     @Suppress("MemberVisibilityCanBePrivate")
-    private val configurationName: ConfigurationName,
+    val configurationName: String,
 ) : Named {
     companion object {
         private val log = Logging.getLogger(LibSrcItem::class.java)
@@ -50,7 +63,7 @@ abstract class LibSrcItem(
 
     //this is needed to implement Named interface from Gradle
     @Deprecated(level = DeprecationLevel.HIDDEN, message = "Use configurationName instead")
-    override fun getName(): String = configurationName.name
+    override fun getName(): String = configurationName
 
     /**
      * Attaches a sources set via [ConfigurableFileTree] for this configuration.
@@ -65,7 +78,7 @@ abstract class LibSrcItem(
         baseDir: Any,
         action: Action<in ConfigurableFileTree> = Action { }
     ): ConfigurableFileTree {
-        log.info("Configuring libsrc for configuration {} and baseDir {}", configurationName.name, baseDir)
+        log.info("Configuring libsrc for configuration {} and baseDir {}", configurationName, baseDir)
 
         val tree = project.fileTree(baseDir, action)
         targets += tree
