@@ -116,3 +116,10 @@ Similarly, we register an extension per each known configuration. The downside i
 there is no base type for extensions, so one would have do deal with that somehow when/if it's needed to
 list all configured extensions.
 
+The next step was to implement an invoke operation for the `MyExtensionItem` class to allow syntax
+like `configurationName(path) { }`. In fact, IntelliJ highlights the `configurationName` as getter,
+rather than as a function call. The code is the same. 
+
+So far, it looks like we lack some generic way in Gradle to allow generating a code like it does for
+`DependencyHandler` class. On the other end, the more freedom, the move complexity it may bring
+to the ecosystem.
