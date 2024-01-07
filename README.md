@@ -81,3 +81,38 @@ It has a
 [shelved IDEA-167533](https://youtrack.jetbrains.com/issue/IDEA-167533/Importing-Gradle-project-misses-tasks-that-use-builtBy)
 bug for IntelliJ.
 
+
+# Implementing Gradle Extensions
+
+For the `libsrc` we need an extension which works just like the `dependencies` block for standard configurations. 
+You may see from the Gradle sources, that it generated for every configuration a set of extension functions,
+for all registered configurations. That logic is implemented as a custom case of [AccessorFragments.kt](https://github.com/gradle/gradle/blob/2c09566a23addb5640baaa3347c17d0e80ce416d/platforms/core-configuration/kotlin-dsl/src/main/kotlin/org/gradle/kotlin/dsl/accessors/AccessorFragments.kt#L58),
+see [AccessorFragments for Configurations](https://github.com/gradle/gradle/blob/2c09566a23addb5640baaa3347c17d0e80ce416d/platforms/core-configuration/kotlin-dsl/src/main/kotlin/org/gradle/kotlin/dsl/accessors/AccessorFragments.kt#L68
+
+Our plugin uses `project.configurations.all { }` to generate all elements to the collection of our extensions.
+
+Gradle use the following logic to collect all the targets for code generation:
+[DefaultProjectSchemaProvider](https://github.com/gradle/gradle/blob/783e4aa305d675d10e2f5f56f2c5794d15356689/platforms/core-configuration/kotlin-dsl-provider-plugins/src/main/kotlin/org/gradle/kotlin/dsl/provider/plugins/DefaultProjectSchemaProvider.kt#L70).
+
+Ideally, we need two accessors: a property getter and a function that accepts configuration lambda. 
+
+The best is to implement a deprecated `Convetion`, for which Gradle generates exactly 2 getters. It is not
+a best way because it is deprecated. 
+
+From the code, which builds the model, we can [see]([DefaultProjectSchemaProvider](https://github.com/gradle/gradle/blob/783e4aa305d675d10e2f5f56f2c5794d15356689/platforms/core-configuration/kotlin-dsl-provider-plugins/src/main/kotlin/org/gradle/kotlin/dsl/provider/plugins/DefaultProjectSchemaProvider.kt#L70).
+) that Gradle generates accessors for all extensions which implement `NamedDomainObjectContainer` interface. 
+
+I found the way to create an instance of `NamedDomainObjectContainer`, just use `project.objects.domainObjectContainer`
+function to generate one. I also use delegated implementation to make my extension object to implenent that
+interface. Outcome -- we have a getter per each collection element.
+
+Now I found that `NamedDomainObjectContainer` is probably not the best option, because we know all the
+possible elements of that collection beforehand, more specifically, there has to be an element for each
+Configuration of the project. 
+
+Next approach is to make our extension object implement `ExtensionAware` interface. Gradle automatically
+generates all necessary implementation methods, e.g. `abstract class MyExtension: ExtensionAware` is enough.
+Similarly, we register an extension per each known configuration. The downside if that approach is that
+there is no base type for extensions, so one would have do deal with that somehow when/if it's needed to
+list all configured extensions.
+
