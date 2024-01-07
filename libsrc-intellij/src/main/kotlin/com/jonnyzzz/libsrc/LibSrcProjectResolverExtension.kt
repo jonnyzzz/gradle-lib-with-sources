@@ -6,6 +6,7 @@ import com.intellij.openapi.externalSystem.model.ProjectKeys
 import com.intellij.openapi.externalSystem.model.project.*
 import com.intellij.openapi.externalSystem.util.ExternalSystemApiUtil
 import org.gradle.api.Project
+import org.gradle.api.file.ConfigurableFileTree
 import org.gradle.tooling.model.idea.IdeaModule
 import org.jetbrains.plugins.gradle.model.data.GradleSourceSetData
 import org.jetbrains.plugins.gradle.service.project.AbstractProjectResolverExtension
@@ -15,13 +16,13 @@ import java.io.Serializable
 import kotlin.reflect.KProperty
 
 interface LibSrcProjectInfo : Serializable {
+    val fetchSourcesTaskName: String
     val infos: List<LibSrcProjectInfoItem>
 }
 
 interface LibSrcProjectInfoItem : Serializable {
     val sourceSetName: String
-    val libraryName: String
-    val sourceFolders: List<String>
+    val sourceFolders: Collection<String>
 }
 
 class LibSrcProjectResolverExtension : AbstractProjectResolverExtension() {
@@ -42,12 +43,19 @@ class LibSrcProjectResolverExtension : AbstractProjectResolverExtension() {
     ) {
         logger.warn("Found model $libSrcInfos. $gradleModel, ${ideModule.data}, ${ideModule.children}")
 
+        //resolving sources sources
+        val buildLauncher = resolverCtx.connection.newBuild().forTasks(libSrcInfos.fetchSourcesTaskName)
+        resolverCtx.cancellationTokenSource?.token()?.let { token -> buildLauncher.withCancellationToken(token) }
+
+        //TODO: no progress is reported back
+        buildLauncher.run()
+
         val gradleModules: MutableCollection<DataNode<GradleSourceSetData>> =
             ExternalSystemApiUtil.getChildren(ideModule, GradleSourceSetData.KEY)
 
         for (libSrcInfo in libSrcInfos.infos) {
             val gradleModule: DataNode<GradleSourceSetData>? =
-                gradleModules.find { libSrcInfo.sourceSetName == it.data.moduleName /*private getSourceSetName()*/ }
+                gradleModules.firstOrNull { libSrcInfo.sourceSetName == it.data.moduleName /*private getSourceSetName()*/ }
 
             if (gradleModule == null) {
                 logger.warn("Failed to resolve module $libSrcInfo")
@@ -78,35 +86,66 @@ class LibSrcProjectModelBuilderService : ModelBuilderService {
     }
 
     override fun buildAll(modelName: String?, project: Project?): Any? {
-        println("Hello from libsrc Import Service")
-        val ext = project?.dependencies?.extensions?.findByName("libsrc") ?: return null
+        if (modelName == null || project == null) return null
+        if (!canBuild(modelName)) return null
+
+        val libSrcProjectExtension = project.extensions
+            .findByName("libsrc") as? Collection<*> ?: return null
+
+        val srcConfigurationTaskName: String by libSrcProjectExtension.dynamic()
 
         try {
-            val configurations: Map<*, *> by ext.dynamic()
-            val items: List<Any> = configurations.values.filterNotNull()
-            println("Hello from libsrc Import Service: $configurations")
+            val items = mutableListOf<LibSrcProjectInfoItem>()
 
-            for (item in items) {
+            for (item in libSrcProjectExtension.filterNotNull().toList()) {
                 val configurationName: String by item.dynamic()
                 val targets: List<*> by item.dynamic()
-                println("Hello from libsrc: $configurationName -> $targets")
+                val actualFiles = targets
+                    .filterIsInstance<ConfigurableFileTree>()
+                    .flatMap { it.files }
+                    .map { it.absolutePath }
+                    .toSortedSet()
+
+                if (actualFiles.isEmpty()) continue
+
+                val modelItem = LibSrcProjectInfoItemData(
+                    //TODO: map configuration to source set decently
+                    sourceSetName = when (configurationName) {
+                        "implementation" -> "main"
+                        "testImplementation" -> "test"
+                        else -> configurationName
+
+                    },
+                    //TODO: allow not only fileset, but also a directory of sources
+                    sourceFolders = actualFiles,
+                )
+
+                items += modelItem
             }
+
             println("Bye from libsrc Import Service")
+
+            return LibSrcProjectInfoData(
+                fetchSourcesTaskName = srcConfigurationTaskName,
+                infos = items.toList()
+            )
         } catch (t: Throwable) {
             println("Crash from libsrc Import Service: " + t.message + "\n\n" + t)
             return null
         }
-
-        return object : LibSrcProjectInfo {
-            override val infos: List<LibSrcProjectInfoItem> = listOf(
-                object : LibSrcProjectInfoItem {
-                    override val sourceSetName: String = "main"
-                    override val libraryName: String = "test"
-                    override val sourceFolders: List<String> = listOf("test2")
-                }
-            )
-        }
     }
+}
+
+class LibSrcProjectInfoData(
+    override val fetchSourcesTaskName: String,
+    override val infos: List<LibSrcProjectInfoItem>,
+) : LibSrcProjectInfo, Serializable
+
+class LibSrcProjectInfoItemData(
+    override val sourceSetName: String,
+    override val sourceFolders: Collection<String>,
+) : LibSrcProjectInfoItem, Serializable {
+    override fun toString(): String = "LibSrcProjectInfoItem{configuration=$sourceSetName, files count: ${sourceFolders.size}"
 }
 
 fun Any.dynamic() = ReflectionDelegate(this)

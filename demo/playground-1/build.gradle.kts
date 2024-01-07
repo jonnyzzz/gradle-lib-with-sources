@@ -22,13 +22,13 @@ val srcUnpackMarker = File(srcDir, "intellij.marker")
 dependencies {
     implementation(fileTree(libDir) {
         include("*.jar")
-        builtBy("pretendDownloadLibs")
+        builtBy(provider { pretendDownloadLibs })
     })
 }
 
 libsrc {
-    implementation(srcUnpack) {
-        builtBy(pretendDownloadLibs)
+    implementation(srcZip) {
+        builtBy(provider { downloadIntelliJ })
     }
 }
 
